@@ -89,12 +89,10 @@ function calcScore(pred, match) {
   const p = s => { const [r, w] = (s || "0/0").split("/"); return [+r || 0, +w || 0]; };
   const [r1a, w1a] = p(match.realScore.team1), [r2a, w2a] = p(match.realScore.team2);
   const [r1p, w1p] = p(pred.team1Score), [r2p, w2p] = p(pred.team2Score);
-  // Only score the predicted runs/wickets for the WINNING team
-  const team1Won = r1a > r2a;
-  const [rWa, wWa] = team1Won ? [r1a, w1a] : [r2a, w2a];
-  const [rWp, wWp] = team1Won ? [r1p, w1p] : [r2p, w2p];
+  // Linear 1-pt-per-run deduction for BOTH teams — maximises separation at scale
   const runPts = (a, b) => Math.max(0, 30 - Math.abs(a - b));
-  let pts = runPts(rWp, rWa) + (wWp === wWa ? 10 : 0);
+  let pts = runPts(r1p, r1a) + (w1p === w1a ? 10 : 0)
+          + runPts(r2p, r2a) + (w2p === w2a ? 10 : 0);
   if (r1p + r2p > 0 && (r1p > r2p) === (r1a > r2a)) pts += 20;
   if (pred.mom?.trim().toLowerCase() === match.realMOM?.trim().toLowerCase()) pts += 20;
   return pts;
@@ -878,7 +876,7 @@ function BigScreen({ match, predictions }) {
           {/* Tiebreak note */}
           {step >= 3 && (
             <div className="up" style={{ textAlign: "center", marginTop: 20, fontFamily: PF, fontSize: 6, color: C.dim, lineHeight: 2.2 }}>
-              Tiebreaker: earliest submission wins · Scored out of 80 pts
+              Tiebreaker: earliest submission wins · Scored out of 120 pts
             </div>
           )}
         </div>
