@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { QRCodeSVG } from "qrcode.react";
 
 // ─────────────────────────────────────────────────────────────
 //  CONFIG  — swap these two lines with your Firebase values
@@ -913,9 +914,33 @@ function BigScreen({ match, predictions }) {
         </div>
       )}
 
-      {match?.status === "open" && (
-        <div className="blink" style={{ position: "fixed", bottom: 16, right: 20, fontSize: 6, color: C.dim }}>
-          SCAN QR TO PREDICT
+      {/* ── QR CODE (fixed bottom-right, visible when open or locked) ── */}
+      {(match?.status === "open" || match?.status === "locked") && (
+        <div style={{
+          position: "fixed", bottom: 20, right: 20,
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+          zIndex: 100,
+        }}>
+          <div style={{
+            padding: 10,
+            background: "#07071F",
+            border: `3px solid ${match?.status === "open" ? C.pink : C.gold}`,
+            boxShadow: `0 0 20px ${match?.status === "open" ? C.pink : C.gold}44, 4px 4px 0 ${match?.status === "open" ? C.pinkD : C.goldD}`,
+          }}>
+            <QRCodeSVG
+              value="https://predict-the-match.vercel.app"
+              size={110}
+              bgColor="#07071F"
+              fgColor={match?.status === "open" ? C.pink : C.gold}
+              level="M"
+            />
+          </div>
+          <div
+            className={match?.status === "open" ? "blink gpink" : "blink ggold"}
+            style={{ fontFamily: PF, fontSize: 6, letterSpacing: 1, textAlign: "center" }}
+          >
+            {match?.status === "open" ? "▶ SCAN TO PREDICT" : "⏸ MATCH IN PROGRESS"}
+          </div>
         </div>
       )}
     </div>
