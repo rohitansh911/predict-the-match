@@ -66,6 +66,7 @@ const submitPrediction = async (form) => {
   const safe = {
     nickname: san(form.nickname, 20),
     team: form.team === "team1" ? "team1" : "team2",
+    winner: form.winner === "team1" ? "team1" : "team2",
     team1Score: `${Math.min(400, Math.max(0, +form.t1r || 0))}/${Math.min(10, Math.max(0, +form.t1w || 0))}`,
     team2Score: `${Math.min(400, Math.max(0, +form.t2r || 0))}/${Math.min(10, Math.max(0, +form.t2w || 0))}`,
     mom: san(form.mom, 40),
@@ -93,7 +94,9 @@ function calcScore(pred, match) {
   const runPts = (a, b) => Math.max(0, 30 - Math.abs(a - b));
   let pts = runPts(r1p, r1a) + (w1p === w1a ? 10 : 0)
           + runPts(r2p, r2a) + (w2p === w2a ? 10 : 0);
-  if (r1p + r2p > 0 && (r1p > r2p) === (r1a > r2a)) pts += 20;
+  // Use explicit winner pick if available, otherwise infer from scores
+  const predictedT1Wins = pred.winner ? pred.winner === "team1" : (r1p > r2p);
+  if ((r1p + r2p > 0 || pred.winner) && predictedT1Wins === (r1a > r2a)) pts += 20;
   if (pred.mom?.trim().toLowerCase() === match.realMOM?.trim().toLowerCase()) pts += 20;
   return pts;
 }
@@ -371,7 +374,7 @@ function Badge({ status }) {
 //  FAN VIEW
 // ─────────────────────────────────────────────────────────────
 function FanView({ match, submitted, onSubmit }) {
-  const [form, setForm] = useState({ nickname: "", team: "", t1r: "", t1w: "5", t2r: "", t2w: "7", mom: "" });
+  const [form, setForm] = useState({ nickname: "", team: "", winner: "", t1r: "", t1w: "5", t2r: "", t2w: "7", mom: "" });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const sf = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -384,6 +387,7 @@ function FanView({ match, submitted, onSubmit }) {
     if (!form.team) { setErr("⚠ Pick your team first!"); return; }
     if (!form.t1r || isNaN(form.t1r)) { setErr(`⚠ Enter ${t1} runs!`); return; }
     if (!form.t2r || isNaN(form.t2r)) { setErr(`⚠ Enter ${t2} runs!`); return; }
+    if (!form.winner) { setErr("⚠ Pick the winning team!"); return; }
     if (!form.mom.trim()) { setErr("⚠ Pick a Man of the Match!"); return; }
     setBusy(true);
     try { await onSubmit(form); }
@@ -533,6 +537,43 @@ function FanView({ match, submitted, onSubmit }) {
               <select value={form.t2w} onChange={sf("t2w")}>
                 {[...Array(11)].map((_, i) => <option key={i} value={i}>{i}</option>)}
               </select></div>
+          </div>
+        </div>
+
+        {/* WHO WILL WIN */}
+        <div className="fg">
+          <label className="lbl">🏆 WHO WILL WIN?</label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <button
+              type="button"
+              onClick={() => setForm(f => ({ ...f, winner: "team1" }))}
+              style={{
+                fontFamily: PF, fontSize: 7, padding: "16px 8px", cursor: "pointer",
+                border: form.winner === "team1" ? `3px solid ${C.gold}` : `3px solid ${C.border}`,
+                background: form.winner === "team1" ? C.gold + "22" : C.card,
+                color: form.winner === "team1" ? C.gold : C.dim,
+                boxShadow: form.winner === "team1" ? `0 0 18px ${C.gold}55, 4px 4px 0 ${C.goldD}` : "none",
+                textAlign: "center", lineHeight: 2.2, transition: "all .15s",
+                textShadow: form.winner === "team1" ? `0 0 10px ${C.gold}` : "none",
+              }}>
+              {form.winner === "team1" ? "🏆" : "🏏"}<br />
+              <span style={{ fontSize: 8 }}>{t1}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setForm(f => ({ ...f, winner: "team2" }))}
+              style={{
+                fontFamily: PF, fontSize: 7, padding: "16px 8px", cursor: "pointer",
+                border: form.winner === "team2" ? `3px solid ${C.gold}` : `3px solid ${C.border}`,
+                background: form.winner === "team2" ? C.gold + "22" : C.card,
+                color: form.winner === "team2" ? C.gold : C.dim,
+                boxShadow: form.winner === "team2" ? `0 0 18px ${C.gold}55, 4px 4px 0 ${C.goldD}` : "none",
+                textAlign: "center", lineHeight: 2.2, transition: "all .15s",
+                textShadow: form.winner === "team2" ? `0 0 10px ${C.gold}` : "none",
+              }}>
+              {form.winner === "team2" ? "🏆" : "🏏"}<br />
+              <span style={{ fontSize: 8 }}>{t2}</span>
+            </button>
           </div>
         </div>
 
