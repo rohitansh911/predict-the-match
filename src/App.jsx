@@ -93,7 +93,7 @@ function calcScore(pred, match) {
   const team1Won = r1a > r2a;
   const [rWa, wWa] = team1Won ? [r1a, w1a] : [r2a, w2a];
   const [rWp, wWp] = team1Won ? [r1p, w1p] : [r2p, w2p];
-  const runPts = (a, b) => { const d = Math.abs(a - b); return d === 0 ? 30 : d <= 3 ? 20 : d <= 8 ? 10 : d <= 15 ? 5 : 0; };
+  const runPts = (a, b) => Math.max(0, 30 - Math.abs(a - b));
   let pts = runPts(rWp, rWa) + (wWp === wWa ? 10 : 0);
   if (r1p + r2p > 0 && (r1p > r2p) === (r1a > r2a)) pts += 20;
   if (pred.mom?.trim().toLowerCase() === match.realMOM?.trim().toLowerCase()) pts += 20;
