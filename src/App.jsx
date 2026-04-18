@@ -67,8 +67,8 @@ const submitPrediction = async (form) => {
     nickname: san(form.nickname, 20),
     team: form.team === "team1" ? "team1" : "team2",
     winner: form.winner === "team1" ? "team1" : "team2",
-    team1Score: `${Math.min(400, Math.max(0, +form.t1r || 0))}/${Math.min(10, Math.max(0, +form.t1w || 0))}`,
-    team2Score: `${Math.min(400, Math.max(0, +form.t2r || 0))}/${Math.min(10, Math.max(0, +form.t2w || 0))}`,
+    team1Score: form.t1r ? `${Math.min(400, Math.max(0, +form.t1r || 0))}/${Math.min(10, Math.max(0, +form.t1w || 0))}` : "",
+    team2Score: form.t2r ? `${Math.min(400, Math.max(0, +form.t2r || 0))}/${Math.min(10, Math.max(0, +form.t2w || 0))}` : "",
     mom: san(form.mom, 40),
     timestamp: Date.now(),
   };
@@ -89,14 +89,15 @@ function calcScore(pred, match) {
   if (!match?.realScore) return null;
   const p = s => { const [r, w] = (s || "0/0").split("/"); return [+r || 0, +w || 0]; };
   const [r1a, w1a] = p(match.realScore.team1), [r2a, w2a] = p(match.realScore.team2);
+  const hasT1 = !!(pred.team1Score), hasT2 = !!(pred.team2Score);
   const [r1p, w1p] = p(pred.team1Score), [r2p, w2p] = p(pred.team2Score);
   // Linear 1-pt-per-run deduction for BOTH teams — maximises separation at scale
   const runPts = (a, b) => Math.max(0, 30 - Math.abs(a - b));
-  let pts = runPts(r1p, r1a) + (w1p === w1a ? 10 : 0)
-          + runPts(r2p, r2a) + (w2p === w2a ? 10 : 0);
+  let pts = (hasT1 ? runPts(r1p, r1a) + (w1p === w1a ? 10 : 0) : 0)
+          + (hasT2 ? runPts(r2p, r2a) + (w2p === w2a ? 10 : 0) : 0);
   // Use explicit winner pick if available, otherwise infer from scores
   const predictedT1Wins = pred.winner ? pred.winner === "team1" : (r1p > r2p);
-  if ((r1p + r2p > 0 || pred.winner) && predictedT1Wins === (r1a > r2a)) pts += 20;
+  if (hasT1 && hasT2 && (r1p + r2p > 0 || pred.winner) && predictedT1Wins === (r1a > r2a)) pts += 20;
   if (pred.mom?.trim().toLowerCase() === match.realMOM?.trim().toLowerCase()) pts += 20;
   return pts;
 }
@@ -374,7 +375,7 @@ function Badge({ status }) {
 //  FAN VIEW
 // ─────────────────────────────────────────────────────────────
 function FanView({ match, submitted, onSubmit }) {
-  const [form, setForm] = useState({ nickname: "", team: "", winner: "", t1r: "", t1w: "5", t2r: "", t2w: "7", mom: "" });
+  const [form, setForm] = useState({ nickname: "", team: "", winner: "", predictMode: "both", t1r: "", t1w: "5", t2r: "", t2w: "7", mom: "" });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const sf = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -385,8 +386,10 @@ function FanView({ match, submitted, onSubmit }) {
     setErr("");
     if (!form.nickname.trim()) { setErr("⚠ Enter a nickname!"); return; }
     if (!form.team) { setErr("⚠ Pick your team first!"); return; }
-    if (!form.t1r || isNaN(form.t1r)) { setErr(`⚠ Enter ${t1} runs!`); return; }
-    if (!form.t2r || isNaN(form.t2r)) { setErr(`⚠ Enter ${t2} runs!`); return; }
+    const needT1 = form.predictMode === "both" || form.team === "team1";
+    const needT2 = form.predictMode === "both" || form.team === "team2";
+    if (needT1 && (!form.t1r || isNaN(form.t1r))) { setErr(`⚠ Enter ${t1} runs!`); return; }
+    if (needT2 && (!form.t2r || isNaN(form.t2r))) { setErr(`⚠ Enter ${t2} runs!`); return; }
     if (!form.winner) { setErr("⚠ Pick the winning team!"); return; }
     if (!form.mom.trim()) { setErr("⚠ Pick a Man of the Match!"); return; }
     setBusy(true);
@@ -511,33 +514,89 @@ function FanView({ match, submitted, onSubmit }) {
             </div>
           )}
         </div>
+        {/* ── PREDICTION MODE TOGGLE (shows after team pick) ── */}
+        {form.team && (
+          <div className="fg">
+            <label className="lbl">🎯 PREDICTION SCOPE</label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, predictMode: "both" }))}
+                style={{
+                  fontFamily: PF, fontSize: 7, padding: "12px 8px", cursor: "pointer",
+                  border: form.predictMode === "both" ? `3px solid ${C.gold}` : `3px solid ${C.border}`,
+                  background: form.predictMode === "both" ? C.gold + "22" : C.card,
+                  color: form.predictMode === "both" ? C.gold : C.dim,
+                  boxShadow: form.predictMode === "both" ? `0 0 14px ${C.gold}44, 4px 4px 0 ${C.goldD}` : "none",
+                  textAlign: "center", lineHeight: 2.2, transition: "all .15s",
+                }}>
+                📊<br /><span style={{ fontSize: 6 }}>BOTH TEAMS</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, predictMode: "mine" }))}
+                style={{
+                  fontFamily: PF, fontSize: 7, padding: "12px 8px", cursor: "pointer",
+                  border: form.predictMode === "mine" ? `3px solid ${C.green}` : `3px solid ${C.border}`,
+                  background: form.predictMode === "mine" ? C.green + "18" : C.card,
+                  color: form.predictMode === "mine" ? C.green : C.dim,
+                  boxShadow: form.predictMode === "mine" ? `0 0 14px ${C.green}44, 4px 4px 0 #00884433` : "none",
+                  textAlign: "center", lineHeight: 2.2, transition: "all .15s",
+                }}>
+                ⚡<br /><span style={{ fontSize: 6 }}>MY TEAM ONLY</span>
+              </button>
+            </div>
+            {form.predictMode === "mine" && (
+              <div className="up" style={{
+                marginTop: 8, padding: "6px 12px", textAlign: "center",
+                fontFamily: PF, fontSize: 6, color: C.green,
+                background: C.green + "10", border: `2px solid ${C.green}33`,
+              }}>
+                ✓ Predicting only {form.team === "team1" ? t1 : t2}'s score
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="card fg">
-          <div className="gblue" style={{ fontFamily: PF, fontSize: 8, marginBottom: 16 }}>🏏 FINAL SCORE PREDICTION</div>
-
-          {/* Team 1 */}
-          <label className="lbl" style={{ color: C.pink }}>{t1}</label>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 8, marginBottom: 14 }}>
-            <div><label className="lbl">RUNS</label>
-              <input type="number" min="0" max="400" placeholder="180" value={form.t1r} onChange={sf("t1r")} /></div>
-            <div><label className="lbl">WICKETS</label>
-              <select value={form.t1w} onChange={sf("t1w")}>
-                {[...Array(11)].map((_, i) => <option key={i} value={i}>{i}</option>)}
-              </select></div>
+          <div className="gblue" style={{ fontFamily: PF, fontSize: 8, marginBottom: 16 }}>
+            {form.predictMode === "mine" ? "⚡ MY TEAM'S SCORE PREDICTION" : "🏏 FINAL SCORE PREDICTION"}
           </div>
 
-          {/* VS */}
-          <div style={{ textAlign: "center", fontFamily: PF, fontSize: 12, color: C.gold, letterSpacing: 6, margin: "4px 0 14px" }}>VS</div>
+          {/* Team 1 — always in both mode; in mine mode only if team1 fan */}
+          {(form.predictMode !== "mine" || form.team === "team1") && (
+            <>
+              <label className="lbl" style={{ color: C.pink }}>{t1}</label>
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 8, marginBottom: 14 }}>
+                <div><label className="lbl">RUNS</label>
+                  <input type="number" min="0" max="400" placeholder="180" value={form.t1r} onChange={sf("t1r")} /></div>
+                <div><label className="lbl">WICKETS</label>
+                  <select value={form.t1w} onChange={sf("t1w")}>
+                    {[...Array(11)].map((_, i) => <option key={i} value={i}>{i}</option>)}
+                  </select></div>
+              </div>
+            </>
+          )}
 
-          {/* Team 2 */}
-          <label className="lbl" style={{ color: C.blue }}>{t2}</label>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 8 }}>
-            <div><label className="lbl">RUNS</label>
-              <input type="number" min="0" max="400" placeholder="165" value={form.t2r} onChange={sf("t2r")} /></div>
-            <div><label className="lbl">WICKETS</label>
-              <select value={form.t2w} onChange={sf("t2w")}>
-                {[...Array(11)].map((_, i) => <option key={i} value={i}>{i}</option>)}
-              </select></div>
-          </div>
+          {/* VS divider — only in both mode */}
+          {form.predictMode !== "mine" && (
+            <div style={{ textAlign: "center", fontFamily: PF, fontSize: 12, color: C.gold, letterSpacing: 6, margin: "4px 0 14px" }}>VS</div>
+          )}
+
+          {/* Team 2 — always in both mode; in mine mode only if team2 fan */}
+          {(form.predictMode !== "mine" || form.team === "team2") && (
+            <>
+              <label className="lbl" style={{ color: C.blue }}>{t2}</label>
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 8 }}>
+                <div><label className="lbl">RUNS</label>
+                  <input type="number" min="0" max="400" placeholder="165" value={form.t2r} onChange={sf("t2r")} /></div>
+                <div><label className="lbl">WICKETS</label>
+                  <select value={form.t2w} onChange={sf("t2w")}>
+                    {[...Array(11)].map((_, i) => <option key={i} value={i}>{i}</option>)}
+                  </select></div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* WHO WILL WIN */}
@@ -643,8 +702,9 @@ function BigScreen({ match, predictions }) {
   const total = list.length;
 
   // Win prediction %
-  const t1wins = list.filter(p => { const [r1] = (p.team1Score || "0/0").split("/"); const [r2] = (p.team2Score || "0/0").split("/"); return +r1 > +r2; }).length;
-  const t1pct = total ? Math.round(t1wins / total * 100) : 50;
+  const bothScored = list.filter(p => p.team1Score && p.team2Score);
+  const t1wins = bothScored.filter(p => { const [r1] = (p.team1Score || "0/0").split("/"); const [r2] = (p.team2Score || "0/0").split("/"); return +r1 > +r2; }).length;
+  const t1pct = bothScored.length ? Math.round(t1wins / bothScored.length * 100) : 50;
   const t2pct = 100 - t1pct;
 
   // Fan loyalty
@@ -856,9 +916,9 @@ function BigScreen({ match, predictions }) {
 
                         {/* Score prediction */}
                         <div style={{ fontFamily: PF, fontSize: 7, color: C.dim, marginBottom: 4, lineHeight: 2 }}>
-                          <span className="gpink">{p.team1Score}</span>
+                          <span className="gpink">{p.team1Score || "—"}</span>
                           <span style={{ margin: "0 6px", color: C.dim }}>vs</span>
-                          <span className="gblue">{p.team2Score}</span>
+                          <span className="gblue">{p.team2Score || "—"}</span>
                         </div>
 
                         {/* MOM */}
@@ -944,8 +1004,8 @@ function BigScreen({ match, predictions }) {
                   </span>
                 )}
               </div>
-              <div style={{ color: C.white, marginBottom: 3 }}>{match?.team1}: <span className="gpink">{p.team1Score}</span></div>
-              <div style={{ color: C.white, marginBottom: 3 }}>{match?.team2}: <span className="gblue">{p.team2Score}</span></div>
+              <div style={{ color: C.white, marginBottom: 3 }}>{match?.team1}: <span className="gpink">{p.team1Score || "—"}</span></div>
+              <div style={{ color: C.white, marginBottom: 3 }}>{match?.team2}: <span className="gblue">{p.team2Score || "—"}</span></div>
               <div className="ggold">🏅 {p.mom}</div>
             </div>
           ))}
